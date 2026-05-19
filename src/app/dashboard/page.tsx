@@ -1,48 +1,37 @@
-import { auth } from "@/auth"
-import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { getDefaultUserId } from "@/lib/current-user"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { EncounterPanel } from "./EncounterPanel"
 import { InitiativeList } from "./InitiativeList"
 import { InitiativeRoller } from "./InitiativeRoller"
 import { LibrarySearch } from "./LibrarySearch"
 import { LibraryPanel } from "./LibraryPanel"
-import { addCombatant, signOutAction } from "./actions"
+import { addCombatant } from "./actions"
 
 export default async function DashboardPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/login")
+  const userId = await getDefaultUserId()
 
   const [combatants, encounters, libraryEntries] = await Promise.all([
     prisma.combatant.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { initiative: "desc" },
     }),
     prisma.encounter.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { createdAt: "desc" },
     }),
     prisma.libraryEntry.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { name: "asc" },
     }),
   ])
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b px-6 py-3 flex items-center justify-between">
+      <header className="border-b px-6 py-3 flex items-center">
         <h1 className="font-semibold tracking-tight">Alatar</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">{session.user.email}</span>
-          <form action={signOutAction}>
-            <Button variant="outline" size="sm" type="submit">
-              Sign out
-            </Button>
-          </form>
-        </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-8">

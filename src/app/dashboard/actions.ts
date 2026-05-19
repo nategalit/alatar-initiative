@@ -1,16 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
-import { auth, signOut } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { getDefaultUserId } from "@/lib/current-user"
 import { toSnapshot, type CombatantSnapshot } from "@/lib/encounter"
 
 type ActionField = "actionUsed" | "bonusActionUsed" | "reactionUsed"
 
 export async function addCombatant(formData: FormData) {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/login")
+  const userId = await getDefaultUserId()
 
   const name = formData.get("name") as string
   const type = (formData.get("type") as string) || "MONSTER"
@@ -30,14 +28,14 @@ export async function addCombatant(formData: FormData) {
   if (!base) return
 
   const existing = await prisma.combatant.findMany({
-    where: { userId: session.user.id, name: { startsWith: base } },
+    where: { userId, name: { startsWith: base } },
     select: { name: true },
   })
   const finalName = existing.length === 0 ? base : `${base} ${existing.length + 1}`
 
   await prisma.combatant.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: finalName,
       type: type as "MONSTER" | "PLAYER" | "LAIR_ACTION",
       initiative,
@@ -53,73 +51,54 @@ export async function addCombatant(formData: FormData) {
 }
 
 export async function deleteCombatant(id: string) {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/login")
+  const userId = await getDefaultUserId()
 
-  await prisma.combatant.deleteMany({
-    where: { id, userId: session.user.id },
-  })
+  await prisma.combatant.deleteMany({ where: { id, userId } })
 
   revalidatePath("/dashboard")
 }
 
-export async function toggleCombatantAction(
-  id: string,
-  field: ActionField,
-  value: boolean
-) {
-  const session = await auth()
-  if (!session?.user?.id) return
+export async function toggleCombatantAction(id: string, field: ActionField, value: boolean) {
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { [field]: value },
   })
 }
 
 export async function updateHpCurrent(id: string, newHp: number) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { hpCurrent: newHp },
   })
 }
 
-export async function updateLegendaryResistance(
-  id: string,
-  max: number,
-  used: number
-) {
-  const session = await auth()
-  if (!session?.user?.id) return
+export async function updateLegendaryResistance(id: string, max: number, used: number) {
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
-    data: {
-      legendaryResistanceMax: max,
-      legendaryResistanceUsed: used,
-    },
+    where: { id, userId },
+    data: { legendaryResistanceMax: max, legendaryResistanceUsed: used },
   })
 }
 
 export async function updateConditions(id: string, conditions: string[]) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { conditions: JSON.stringify(conditions) },
   })
 }
 
 export async function updateLegendaryActionsUsed(id: string, used: number) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { legendaryActionsUsed: used },
   })
 }
@@ -128,44 +107,39 @@ export async function updateLegendaryActionsList(
   id: string,
   actions: { name: string; cost: number }[]
 ) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { legendaryActions: JSON.stringify(actions) },
   })
 }
 
 export async function updateMapPosition(id: string, x: number | null, y: number | null) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { mapX: x, mapY: y },
   })
 }
 
 export async function addFromLibrary(entryId: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  const entry = await prisma.libraryEntry.findFirst({
-    where: { id: entryId, userId: session.user.id },
-  })
+  const entry = await prisma.libraryEntry.findFirst({ where: { id: entryId, userId } })
   if (!entry) return
 
   const base = entry.name
   const existing = await prisma.combatant.findMany({
-    where: { userId: session.user.id, name: { startsWith: base } },
+    where: { userId, name: { startsWith: base } },
     select: { name: true },
   })
   const finalName = existing.length === 0 ? base : `${base} ${existing.length + 1}`
 
   await prisma.combatant.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: finalName,
       type: entry.type,
       shorthand: entry.shorthand,
@@ -195,17 +169,14 @@ export async function addFromLibrary(entryId: string) {
 }
 
 export async function saveToLibrary(combatantId: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  const combatant = await prisma.combatant.findFirst({
-    where: { id: combatantId, userId: session.user.id },
-  })
+  const combatant = await prisma.combatant.findFirst({ where: { id: combatantId, userId } })
   if (!combatant) return
 
   await prisma.libraryEntry.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: combatant.name,
       type: combatant.type,
       shorthand: combatant.shorthand,
@@ -234,31 +205,29 @@ export async function saveToLibrary(combatantId: string) {
 }
 
 export async function deleteLibraryEntry(id: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  await prisma.libraryEntry.deleteMany({ where: { id, userId: session.user.id } })
+  await prisma.libraryEntry.deleteMany({ where: { id, userId } })
 
   revalidatePath("/dashboard")
 }
 
 export async function duplicateCombatant(id: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  const src = await prisma.combatant.findFirst({ where: { id, userId: session.user.id } })
+  const src = await prisma.combatant.findFirst({ where: { id, userId } })
   if (!src) return
 
   const base = src.name
   const existing = await prisma.combatant.findMany({
-    where: { userId: session.user.id, name: { startsWith: base } },
+    where: { userId, name: { startsWith: base } },
     select: { name: true },
   })
   const finalName = existing.length === 0 ? base : `${base} ${existing.length + 1}`
 
   await prisma.combatant.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: finalName,
       type: src.type,
       shorthand: src.shorthand,
@@ -282,13 +251,12 @@ export async function duplicateCombatant(id: string) {
 }
 
 export async function reorderCombatants(orderedIds: string[]) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await Promise.all(
     orderedIds.map((id, index) =>
       prisma.combatant.updateMany({
-        where: { id, userId: session.user.id },
+        where: { id, userId },
         data: { initiative: (orderedIds.length - index) * 10 },
       })
     )
@@ -298,47 +266,38 @@ export async function reorderCombatants(orderedIds: string[]) {
 }
 
 export async function updateNotes(id: string, notes: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
-    data: { notes },
-  })
+  await prisma.combatant.updateMany({ where: { id, userId }, data: { notes } })
 }
 
 export async function updateConcentrating(id: string, concentrating: boolean) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
-    data: { concentrating },
-  })
+  await prisma.combatant.updateMany({ where: { id, userId }, data: { concentrating } })
 }
 
 export async function updateDeathSaves(id: string, successes: number, failures: number) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   await prisma.combatant.updateMany({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     data: { deathSaveSuccesses: successes, deathSaveFailures: failures },
   })
 }
 
 export async function saveEncounter(name: string) {
-  const session = await auth()
-  if (!session?.user?.id || !name.trim()) return
+  const userId = await getDefaultUserId()
+  if (!name.trim()) return
 
   const combatants = await prisma.combatant.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { initiative: "desc" },
   })
 
   await prisma.encounter.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: name.trim(),
       snapshot: JSON.stringify(combatants.map(toSnapshot)),
     },
@@ -348,21 +307,18 @@ export async function saveEncounter(name: string) {
 }
 
 export async function loadEncounter(id: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  const encounter = await prisma.encounter.findFirst({
-    where: { id, userId: session.user.id },
-  })
+  const encounter = await prisma.encounter.findFirst({ where: { id, userId } })
   if (!encounter) return
 
   const snapshots: CombatantSnapshot[] = JSON.parse(encounter.snapshot)
 
-  await prisma.combatant.deleteMany({ where: { userId: session.user.id } })
+  await prisma.combatant.deleteMany({ where: { userId } })
 
   if (snapshots.length > 0) {
     await prisma.combatant.createMany({
-      data: snapshots.map((s) => ({ ...s, userId: session.user.id })),
+      data: snapshots.map((s) => ({ ...s, userId })),
     })
   }
 
@@ -370,17 +326,15 @@ export async function loadEncounter(id: string) {
 }
 
 export async function deleteEncounter(id: string) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
-  await prisma.encounter.deleteMany({ where: { id, userId: session.user.id } })
+  await prisma.encounter.deleteMany({ where: { id, userId } })
 
   revalidatePath("/dashboard")
 }
 
 export async function importEncounter(formData: FormData) {
-  const session = await auth()
-  if (!session?.user?.id) return
+  const userId = await getDefaultUserId()
 
   const file = formData.get("file") as File | null
   if (!file) return
@@ -395,17 +349,13 @@ export async function importEncounter(formData: FormData) {
     return
   }
 
-  await prisma.combatant.deleteMany({ where: { userId: session.user.id } })
+  await prisma.combatant.deleteMany({ where: { userId } })
 
   if (snapshots.length > 0) {
     await prisma.combatant.createMany({
-      data: snapshots.map((s) => ({ ...s, userId: session.user.id })),
+      data: snapshots.map((s) => ({ ...s, userId })),
     })
   }
 
   revalidatePath("/dashboard")
-}
-
-export async function signOutAction() {
-  await signOut({ redirectTo: "/login" })
 }
