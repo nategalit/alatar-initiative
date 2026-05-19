@@ -9,16 +9,22 @@ const DOT_COLOR: Record<string, string> = {
   LAIR_ACTION: "bg-purple-500",
 }
 
+export type MapPosition = { id: string; x: number; y: number; type: string }
+
 export function MiniMap({
   combatantId,
   initialX,
   initialY,
   type,
+  allPositions,
+  onPositionChange,
 }: {
   combatantId: string
   initialX: number | null
   initialY: number | null
   type: string
+  allPositions: MapPosition[]
+  onPositionChange: (id: string, pos: { x: number; y: number } | null) => void
 }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(
     initialX != null && initialY != null ? { x: initialX, y: initialY } : null
@@ -31,16 +37,19 @@ export function MiniMap({
     const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
     setPos({ x, y })
+    onPositionChange(combatantId, { x, y })
     void updateMapPosition(combatantId, x, y)
   }
 
   function handleDotClick(e: React.MouseEvent) {
     e.stopPropagation()
     setPos(null)
+    onPositionChange(combatantId, null)
     void updateMapPosition(combatantId, null, null)
   }
 
   const dotColor = DOT_COLOR[type] ?? "bg-gray-500"
+  const others = allPositions.filter((p) => p.id !== combatantId)
 
   return (
     <div
@@ -54,11 +63,21 @@ export function MiniMap({
         backgroundSize: "25% 25%",
       }}
     >
+      {/* Other combatants — muted dots */}
+      {others.map((p) => (
+        <div
+          key={p.id}
+          className={`absolute w-2 h-2 rounded-full opacity-40 -translate-x-1/2 -translate-y-1/2 pointer-events-none ${DOT_COLOR[p.type] ?? "bg-gray-400"}`}
+          style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
+        />
+      ))}
+
+      {/* Own dot */}
       {pos && (
         <button
           onClick={handleDotClick}
           title="Remove position dot"
-          className={`absolute w-3 h-3 rounded-full ${dotColor} -translate-x-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity`}
+          className={`absolute w-3 h-3 rounded-full ${dotColor} -translate-x-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity z-10`}
           style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }}
           aria-label="Remove position dot"
         />

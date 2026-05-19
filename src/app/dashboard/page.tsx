@@ -10,22 +10,22 @@ import { LibrarySearch } from "./LibrarySearch"
 import { LibraryPanel } from "./LibraryPanel"
 import { addCombatant } from "./actions"
 
+const STAT_FIELDS = [
+  { id: "strMod", label: "STR" },
+  { id: "dexMod", label: "DEX" },
+  { id: "conMod", label: "CON" },
+  { id: "intMod", label: "INT" },
+  { id: "wisMod", label: "WIS" },
+  { id: "chaMod", label: "CHA" },
+]
+
 export default async function DashboardPage() {
   const userId = await getDefaultUserId()
 
   const [combatants, encounters, libraryEntries] = await Promise.all([
-    prisma.combatant.findMany({
-      where: { userId },
-      orderBy: { initiative: "desc" },
-    }),
-    prisma.encounter.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.libraryEntry.findMany({
-      where: { userId },
-      orderBy: { name: "asc" },
-    }),
+    prisma.combatant.findMany({ where: { userId }, orderBy: { initiative: "desc" } }),
+    prisma.encounter.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
+    prisma.libraryEntry.findMany({ where: { userId }, orderBy: { name: "asc" } }),
   ])
 
   return (
@@ -34,97 +34,100 @@ export default async function DashboardPage() {
         <h1 className="font-semibold tracking-tight">Alatar</h1>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-        {/* Add combatant form */}
-        <section>
-          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+      <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+
+        {/* ── Add Combatant ── */}
+        <section className="rounded-lg border px-5 py-4 space-y-3">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Add Combatant
           </h2>
-          <div className="mb-3">
-            <LibrarySearch entries={libraryEntries} />
-          </div>
-          <form action={addCombatant} className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1 min-w-36">
-              <Label htmlFor="name" className="text-xs">Name</Label>
-              <Input id="name" name="name" placeholder="Goblin" required className="h-8" />
+          <LibrarySearch entries={libraryEntries} />
+          <form action={addCombatant} className="space-y-3">
+            {/* Primary fields row */}
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex flex-col gap-1 min-w-36">
+                <Label htmlFor="name" className="text-xs">Name</Label>
+                <Input id="name" name="name" placeholder="Goblin" required className="h-8" />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="type" className="text-xs">Type</Label>
+                <select
+                  id="type"
+                  name="type"
+                  defaultValue="MONSTER"
+                  className="h-8 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="MONSTER">Monster</option>
+                  <option value="PLAYER">Player</option>
+                  <option value="LAIR_ACTION">Lair Action</option>
+                </select>
+              </div>
+
+              <InitiativeRoller />
+
+              <div className="flex flex-col gap-1 w-20">
+                <Label htmlFor="hpMax" className="text-xs">HP Max</Label>
+                <Input id="hpMax" name="hpMax" type="number" placeholder="1" min="1" className="h-8" />
+              </div>
+
+              <div className="flex flex-col gap-1 w-14">
+                <Label htmlFor="ac" className="text-xs">AC</Label>
+                <Input id="ac" name="ac" type="number" placeholder="10" min="0" className="h-8" />
+              </div>
+
+              <div className="flex flex-col gap-1 w-12">
+                <Label htmlFor="legendaryResistanceMax" className="text-xs">LR</Label>
+                <Input id="legendaryResistanceMax" name="legendaryResistanceMax" type="number" placeholder="0" min="0" className="h-8" />
+              </div>
+
+              <div className="flex flex-col gap-1 w-12">
+                <Label htmlFor="legendaryActionsMax" className="text-xs">LA</Label>
+                <Input id="legendaryActionsMax" name="legendaryActionsMax" type="number" placeholder="0" min="0" className="h-8" />
+              </div>
+
+              <Button type="submit" size="sm" className="h-8">Add</Button>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="type" className="text-xs">Type</Label>
-              <select
-                id="type"
-                name="type"
-                defaultValue="MONSTER"
-                className="h-8 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="MONSTER">Monster</option>
-                <option value="PLAYER">Player</option>
-                <option value="LAIR_ACTION">Lair Action</option>
-              </select>
+            {/* Stat modifier row */}
+            <div className="flex flex-wrap gap-2 items-end">
+              {STAT_FIELDS.map(({ id, label }) => (
+                <div key={id} className="flex flex-col gap-1 w-12">
+                  <Label htmlFor={id} className="text-xs text-center">{label}</Label>
+                  <Input
+                    id={id}
+                    name={id}
+                    type="number"
+                    defaultValue="0"
+                    className="h-8 px-1 text-center text-xs"
+                  />
+                </div>
+              ))}
             </div>
-
-            <InitiativeRoller />
-
-            <div className="flex flex-col gap-1 w-20">
-              <Label htmlFor="hpMax" className="text-xs">HP Max</Label>
-              <Input id="hpMax" name="hpMax" type="number" placeholder="1" min="1" className="h-8" />
-            </div>
-
-            <div className="flex flex-col gap-1 w-16">
-              <Label htmlFor="ac" className="text-xs">AC</Label>
-              <Input id="ac" name="ac" type="number" placeholder="10" min="0" className="h-8" />
-            </div>
-
-            <div className="flex flex-col gap-1 w-16">
-              <Label htmlFor="legendaryResistanceMax" className="text-xs">LR</Label>
-              <Input
-                id="legendaryResistanceMax"
-                name="legendaryResistanceMax"
-                type="number"
-                placeholder="0"
-                min="0"
-                className="h-8"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1 w-16">
-              <Label htmlFor="legendaryActionsMax" className="text-xs">LA</Label>
-              <Input
-                id="legendaryActionsMax"
-                name="legendaryActionsMax"
-                type="number"
-                placeholder="0"
-                min="0"
-                className="h-8"
-              />
-            </div>
-
-            <Button type="submit" size="sm" className="h-8">
-              Add
-            </Button>
           </form>
         </section>
 
-        {/* Initiative list */}
-        <section>
+        {/* ── Initiative Order ── */}
+        <section className="rounded-lg border px-5 py-4">
           <InitiativeList combatants={combatants} />
         </section>
 
-        {/* Encounters */}
-        <section>
-          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+        {/* ── Saved Encounters ── */}
+        <section className="rounded-lg border px-5 py-4 space-y-3">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Saved Encounters
           </h2>
           <EncounterPanel encounters={encounters} combatants={combatants} />
         </section>
 
-        {/* Library */}
-        <section>
-          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+        {/* ── Library ── */}
+        <section className="rounded-lg border px-5 py-4 space-y-3">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Library
           </h2>
           <LibraryPanel entries={libraryEntries} />
         </section>
+
       </main>
     </div>
   )

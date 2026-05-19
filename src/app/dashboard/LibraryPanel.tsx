@@ -31,9 +31,29 @@ export function LibraryPanel({ entries }: { entries: LibraryEntry[] }) {
 
   const visible = filter === "ALL" ? entries : entries.filter((e) => e.type === filter)
 
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "alatar-library.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-3">
-      {/* Filter chips */}
+      {/* Filter chips + export */}
+      <div className="flex gap-1.5 flex-wrap items-center">
+        {entries.length > 0 && (
+          <button
+            onClick={exportJson}
+            className="ml-auto px-2.5 py-0.5 rounded text-xs border border-muted-foreground text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+          >
+            Export JSON
+          </button>
+        )}
+      </div>
       <div className="flex gap-1.5 flex-wrap">
         {FILTERS.map(({ label, value }) => (
           <button

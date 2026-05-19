@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   DndContext,
   closestCenter,
@@ -19,7 +19,8 @@ import { CSS } from "@dnd-kit/utilities"
 import type { Combatant } from "@/generated/prisma/client"
 import { Button } from "@/components/ui/button"
 import { CombatantCard } from "./CombatantCard"
-import { reorderCombatants } from "./actions"
+import { reorderCombatants, clearEncounter } from "./actions"
+import type { MapPosition } from "./MiniMap"
 
 function useLocalStorage<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial)
@@ -57,11 +58,7 @@ function SortableItem({
   }
 
   return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={active ? "ring-2 ring-primary rounded-lg" : ""}
-    >
+    <li ref={setNodeRef} style={style} className={active ? "ring-2 ring-primary rounded-lg" : ""}>
       <div className="flex gap-1 items-start">
         <button
           {...attributes}
@@ -86,15 +83,34 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
   const [turnIndex, setTurnIndex] = useLocalStorage("alatar-turn", 0)
   const [log, setLog] = useState<string[]>([])
   const [logOpen, setLogOpen] = useState(false)
-  const [timerDuration, setTimerDuration] = useState(60)
-  const [timerLeft, setTimerLeft] = useState<number | null>(null)
-  const [timerRunning, setTimerRunning] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
 
-  // Sync when server re-renders with new combatant list
-  useEffect(() => { setCombatants(initial) }, [initial])
+  // Positions map — keyed by combatant id, updated by MiniMap callbacks
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number } | null>>(() => {
+    const map: Record<string, { x: number; y: number } | null> = {}
+    for (const c of initial) {
+      map[c.id] = c.mapX != null && c.mapY != null ? { x: c.mapX, y: c.mapY } : null
+    }
+    return map
+  })
 
-  const sensors = useSensors(useSensor(PointerSensor))
+  // Sync positions when server adds new combatants
+  useEffect(() => {
+    setCombatants(initial)
+    setPositions((prev) => {
+      const next = { ...prev }
+      for (const c of initial) {
+        if (!(c.id in next)) {
+          next[c.id] = c.mapX != null && c.mapY != null ? { x: c.mapX, y: c.mapY } : null
+        }
+      }
+      return next
+    })
+  }, [initial])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
 
   const count = combatants.length
   const safeIndex = count > 0 ? Math.min(turnIndex, count - 1) : 0
@@ -105,46 +121,20 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
     return acc
   }, {})
 
+  const allPositions: MapPosition[] = combatants
+    .filter((c) => positions[c.id] != null)
+    .map((c) => ({ id: c.id, x: positions[c.id]!.x, y: positions[c.id]!.y, type: c.type }))
+
   const appendLog = useCallback((entry: string) => {
     setLog((prev) => [entry, ...prev].slice(0, MAX_LOG))
   }, [])
 
-  // Timer tick
-  useEffect(() => {
-    if (timerRunning && timerLeft !== null && timerLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimerLeft((t) => {
-          if (t === null || t <= 1) return 0
-          return t - 1
-        })
-      }, 1000)
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [timerRunning, timerLeft !== null && timerLeft > 0 ? "running" : "stopped"]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // When timer hits 0
-  useEffect(() => {
-    if (timerLeft === 0 && timerRunning) {
-      setTimerRunning(false)
-      if (activeCombatant) {
-        appendLog(`⏰ Time's up: ${activeCombatant.name}`)
-      }
-    }
-  }, [timerLeft]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function startTimer() {
-    setTimerLeft(timerDuration)
-    setTimerRunning(true)
-  }
-
-  function pauseTimer() {
-    setTimerRunning(false)
-  }
-
-  function resetTimer() {
-    setTimerRunning(false)
-    setTimerLeft(null)
-  }
+  const handlePositionChange = useCallback(
+    (id: string, pos: { x: number; y: number } | null) => {
+      setPositions((prev) => ({ ...prev, [id]: pos }))
+    },
+    []
+  )
 
   function advanceTurn(dir: "next" | "prev") {
     if (count === 0) return
@@ -163,18 +153,12 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
     setTurnIndex(nextIndex)
     const next = combatants[nextIndex]
     if (next) appendLog(`Turn: ${next.name}`)
-    // Reset timer for new turn
-    if (timerLeft !== null) {
-      setTimerLeft(timerDuration)
-      setTimerRunning(true)
-    }
   }
 
   function reset() {
     setRound(1)
     setTurnIndex(0)
     setLog([])
-    resetTimer()
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -188,7 +172,6 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
     const reordered = arrayMove(combatants, oldIndex, newIndex)
     setCombatants(reordered)
 
-    // Keep active combatant the same after reorder
     const activeId = activeCombatant?.id
     if (activeId) {
       const newActiveIndex = reordered.findIndex((c) => c.id === activeId)
@@ -197,10 +180,6 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
 
     void reorderCombatants(reordered.map((c) => c.id))
   }
-
-  const timerDisplay = timerLeft !== null
-    ? `${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`
-    : `${timerDuration}s`
 
   return (
     <div className="space-y-3">
@@ -211,106 +190,47 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
         </h2>
         <div className="ml-auto flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-muted-foreground font-medium">Round {round}</span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 px-2 text-xs"
-            onClick={() => advanceTurn("prev")}
-            disabled={count === 0}
-          >
+          <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => advanceTurn("prev")} disabled={count === 0}>
             ← Prev
           </Button>
           {activeCombatant && (
-            <span className="text-xs font-bold uppercase tracking-wide px-2">
-              {activeCombatant.name}
-            </span>
+            <span className="text-xs font-bold uppercase tracking-wide px-2">{activeCombatant.name}</span>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 px-2 text-xs"
-            onClick={() => advanceTurn("next")}
-            disabled={count === 0}
-          >
+          <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => advanceTurn("next")} disabled={count === 0}>
             Next →
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-xs text-muted-foreground"
-            onClick={reset}
-            title="Reset combat to round 1"
-          >
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground" onClick={reset} title="Reset to round 1">
             ↺
           </Button>
 
-          {/* Timer */}
-          <div className="flex items-center gap-1 border rounded px-1.5 h-6">
-            {timerLeft === null ? (
-              <>
-                <input
-                  type="number"
-                  min={5}
-                  max={600}
-                  value={timerDuration}
-                  onChange={(e) => setTimerDuration(Math.max(5, parseInt(e.target.value) || 60))}
-                  className="w-10 text-xs bg-transparent text-center focus:outline-none"
-                  title="Timer duration (seconds)"
-                />
-                <span className="text-xs text-muted-foreground">s</span>
-                <button
-                  type="button"
-                  onClick={startTimer}
-                  disabled={count === 0}
-                  className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
-                  title="Start turn timer"
-                >
-                  ▶
+          {/* Clear encounter */}
+          {confirmClear ? (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-destructive font-medium">Clear all?</span>
+              <form action={clearEncounter}>
+                <button type="submit" className="px-2 py-0.5 rounded text-xs border border-destructive text-destructive hover:bg-red-50">
+                  Yes
                 </button>
-              </>
-            ) : (
-              <>
-                <span className={`text-xs font-mono ${timerLeft <= 10 ? "text-red-500" : ""}`}>
-                  {timerDisplay}
-                </span>
-                {timerRunning ? (
-                  <button
-                    type="button"
-                    onClick={pauseTimer}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                    title="Pause timer"
-                  >
-                    ⏸
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setTimerRunning(true)}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                    title="Resume timer"
-                  >
-                    ▶
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={resetTimer}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  title="Stop timer"
-                >
-                  ✕
-                </button>
-              </>
-            )}
-          </div>
+              </form>
+              <button onClick={() => setConfirmClear(false)} className="px-2 py-0.5 rounded text-xs border border-muted-foreground text-muted-foreground hover:bg-muted">
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear(true)}
+              disabled={count === 0}
+              className="px-2 py-0.5 rounded text-xs border border-muted-foreground text-muted-foreground hover:border-destructive hover:text-destructive disabled:opacity-40 transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
       {/* Card list */}
       {count === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No combatants yet. Add one above to begin.
-        </p>
+        <p className="text-sm text-muted-foreground">No combatants yet. Add one above to begin.</p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={combatants.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -321,6 +241,8 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
                     combatant={c}
                     groupCount={nameCounts[c.name]}
                     onEvent={appendLog}
+                    allPositions={allPositions}
+                    onPositionChange={handlePositionChange}
                   />
                 </SortableItem>
               ))}

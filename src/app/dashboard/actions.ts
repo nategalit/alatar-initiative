@@ -15,14 +15,14 @@ export async function addCombatant(formData: FormData) {
   const initiative = parseInt(formData.get("initiative") as string, 10) || 0
   const hpMax = Math.max(1, parseInt(formData.get("hpMax") as string, 10) || 1)
   const ac = Math.max(0, parseInt(formData.get("ac") as string, 10) || 10)
-  const legendaryResistanceMax = Math.max(
-    0,
-    parseInt(formData.get("legendaryResistanceMax") as string, 10) || 0
-  )
-  const legendaryActionsMax = Math.max(
-    0,
-    parseInt(formData.get("legendaryActionsMax") as string, 10) || 0
-  )
+  const legendaryResistanceMax = Math.max(0, parseInt(formData.get("legendaryResistanceMax") as string, 10) || 0)
+  const legendaryActionsMax = Math.max(0, parseInt(formData.get("legendaryActionsMax") as string, 10) || 0)
+  const strMod = parseInt(formData.get("strMod") as string, 10) || 0
+  const dexMod = parseInt(formData.get("dexMod") as string, 10) || 0
+  const conMod = parseInt(formData.get("conMod") as string, 10) || 0
+  const intMod = parseInt(formData.get("intMod") as string, 10) || 0
+  const wisMod = parseInt(formData.get("wisMod") as string, 10) || 0
+  const chaMod = parseInt(formData.get("chaMod") as string, 10) || 0
 
   const base = name.trim()
   if (!base) return
@@ -44,9 +44,37 @@ export async function addCombatant(formData: FormData) {
       ac,
       legendaryResistanceMax,
       legendaryActionsMax,
+      strMod, dexMod, conMod, intMod, wisMod, chaMod,
     },
   })
 
+  revalidatePath("/dashboard")
+}
+
+export async function clearEncounter() {
+  const userId = await getDefaultUserId()
+  await prisma.combatant.deleteMany({ where: { userId } })
+  revalidatePath("/dashboard")
+}
+
+export async function updateCombatantStats(
+  id: string,
+  data: {
+    initiative: number
+    hpMax: number
+    ac: number
+    strMod: number
+    dexMod: number
+    conMod: number
+    intMod: number
+    wisMod: number
+    chaMod: number
+    legendaryResistanceMax: number
+    legendaryActionsMax: number
+  }
+) {
+  const userId = await getDefaultUserId()
+  await prisma.combatant.updateMany({ where: { id, userId }, data })
   revalidatePath("/dashboard")
 }
 
