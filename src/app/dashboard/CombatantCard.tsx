@@ -6,6 +6,7 @@ import { CombatantType } from "@/generated/prisma/enums"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { MiniMap } from "./MiniMap"
 import {
   toggleCombatantAction,
   updateHpCurrent,
@@ -391,6 +392,13 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
             </Popover>
           </div>
         </div>
+
+        <MiniMap
+          combatantId={combatant.id}
+          initialX={combatant.mapX}
+          initialY={combatant.mapY}
+          type={combatant.type}
+        />
       </div>
     </div>
   )

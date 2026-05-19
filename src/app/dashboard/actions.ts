@@ -102,6 +102,16 @@ export async function updateConditions(id: string, conditions: string[]) {
   })
 }
 
+export async function updateMapPosition(id: string, x: number | null, y: number | null) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { mapX: x, mapY: y },
+  })
+}
+
 export async function addFromLibrary(entryId: string) {
   const session = await auth()
   if (!session?.user?.id) return
