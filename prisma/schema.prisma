@@ -7,6 +7,12 @@ datasource db {
   provider = "sqlite"
 }
 
+enum CombatantType {
+  MONSTER
+  PLAYER
+  LAIR_ACTION
+}
+
 model User {
   id         String      @id @default(cuid())
   email      String      @unique
@@ -17,9 +23,50 @@ model User {
 }
 
 model Combatant {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  id     String        @id @default(cuid())
+  userId String
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  type      CombatantType @default(MONSTER)
+  shorthand String        @default("")
+
+  initiative      Int @default(0)
+  initiativeBonus Int @default(0)
+
+  hpCurrent Int @default(1)
+  hpMax     Int @default(1)
+  hpTemp    Int @default(0)
+  ac        Int @default(10)
+
+  strMod Int @default(0)
+  dexMod Int @default(0)
+  conMod Int @default(0)
+  intMod Int @default(0)
+  wisMod Int @default(0)
+  chaMod Int @default(0)
+
+  strSave Int @default(0)
+  dexSave Int @default(0)
+  conSave Int @default(0)
+  intSave Int @default(0)
+  wisSave Int @default(0)
+  chaSave Int @default(0)
+
+  actionUsed      Boolean @default(false)
+  bonusActionUsed Boolean @default(false)
+  reactionUsed    Boolean @default(false)
+
+  conditions String @default("[]")
+
+  legendaryResistanceMax  Int @default(0)
+  legendaryResistanceUsed Int @default(0)
+
+  notes String @default("")
+
+  mapX Float?
+  mapY Float?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
