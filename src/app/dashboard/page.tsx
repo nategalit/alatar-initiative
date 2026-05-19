@@ -6,13 +6,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CombatantCard } from "./CombatantCard"
 import { EncounterPanel } from "./EncounterPanel"
+import { LibrarySearch } from "./LibrarySearch"
+import { LibraryPanel } from "./LibraryPanel"
 import { addCombatant, signOutAction } from "./actions"
 
 export default async function DashboardPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const [combatants, encounters] = await Promise.all([
+  const [combatants, encounters, libraryEntries] = await Promise.all([
     prisma.combatant.findMany({
       where: { userId: session.user.id },
       orderBy: { initiative: "desc" },
@@ -20,6 +22,10 @@ export default async function DashboardPage() {
     prisma.encounter.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.libraryEntry.findMany({
+      where: { userId: session.user.id },
+      orderBy: { name: "asc" },
     }),
   ])
 
@@ -44,6 +50,9 @@ export default async function DashboardPage() {
           <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Add Combatant
           </h2>
+          <div className="mb-3">
+            <LibrarySearch entries={libraryEntries} />
+          </div>
           <form action={addCombatant} className="flex flex-wrap gap-3 items-end">
             <div className="flex flex-col gap-1 min-w-36">
               <Label htmlFor="name" className="text-xs">Name</Label>
@@ -124,6 +133,14 @@ export default async function DashboardPage() {
             Saved Encounters
           </h2>
           <EncounterPanel encounters={encounters} combatants={combatants} />
+        </section>
+
+        {/* Library */}
+        <section>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+            Library
+          </h2>
+          <LibraryPanel entries={libraryEntries} />
         </section>
       </main>
     </div>

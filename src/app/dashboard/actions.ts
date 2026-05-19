@@ -102,6 +102,94 @@ export async function updateConditions(id: string, conditions: string[]) {
   })
 }
 
+export async function addFromLibrary(entryId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  const entry = await prisma.libraryEntry.findFirst({
+    where: { id: entryId, userId: session.user.id },
+  })
+  if (!entry) return
+
+  await prisma.combatant.create({
+    data: {
+      userId: session.user.id,
+      name: entry.name,
+      type: entry.type,
+      shorthand: entry.shorthand,
+      initiative: entry.initiative,
+      initiativeBonus: entry.initiativeBonus,
+      hpCurrent: entry.hpMax,
+      hpMax: entry.hpMax,
+      ac: entry.ac,
+      strMod: entry.strMod,
+      dexMod: entry.dexMod,
+      conMod: entry.conMod,
+      intMod: entry.intMod,
+      wisMod: entry.wisMod,
+      chaMod: entry.chaMod,
+      strSave: entry.strSave,
+      dexSave: entry.dexSave,
+      conSave: entry.conSave,
+      intSave: entry.intSave,
+      wisSave: entry.wisSave,
+      chaSave: entry.chaSave,
+      legendaryResistanceMax: entry.legendaryResistanceMax,
+      notes: entry.notes,
+    },
+  })
+
+  revalidatePath("/dashboard")
+}
+
+export async function saveToLibrary(combatantId: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  const combatant = await prisma.combatant.findFirst({
+    where: { id: combatantId, userId: session.user.id },
+  })
+  if (!combatant) return
+
+  await prisma.libraryEntry.create({
+    data: {
+      userId: session.user.id,
+      name: combatant.name,
+      type: combatant.type,
+      shorthand: combatant.shorthand,
+      initiative: combatant.initiative,
+      initiativeBonus: combatant.initiativeBonus,
+      hpMax: combatant.hpMax,
+      ac: combatant.ac,
+      strMod: combatant.strMod,
+      dexMod: combatant.dexMod,
+      conMod: combatant.conMod,
+      intMod: combatant.intMod,
+      wisMod: combatant.wisMod,
+      chaMod: combatant.chaMod,
+      strSave: combatant.strSave,
+      dexSave: combatant.dexSave,
+      conSave: combatant.conSave,
+      intSave: combatant.intSave,
+      wisSave: combatant.wisSave,
+      chaSave: combatant.chaSave,
+      legendaryResistanceMax: combatant.legendaryResistanceMax,
+      notes: combatant.notes,
+    },
+  })
+
+  revalidatePath("/dashboard")
+}
+
+export async function deleteLibraryEntry(id: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.libraryEntry.deleteMany({ where: { id, userId: session.user.id } })
+
+  revalidatePath("/dashboard")
+}
+
 export async function saveEncounter(name: string) {
   const session = await auth()
   if (!session?.user?.id || !name.trim()) return

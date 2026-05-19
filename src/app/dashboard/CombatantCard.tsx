@@ -12,6 +12,7 @@ import {
   updateLegendaryResistance,
   deleteCombatant,
   updateConditions,
+  saveToLibrary,
 } from "./actions"
 import {
   CONDITION_LIST,
@@ -209,6 +210,18 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
 
             <span className="text-sm text-muted-foreground shrink-0">🛡 {combatant.ac}</span>
 
+            <form action={saveToLibrary.bind(null, combatant.id)}>
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                title={`Save ${combatant.name} to library`}
+                aria-label={`Save ${combatant.name} to library`}
+              >
+                ★
+              </Button>
+            </form>
             <form action={deleteCombatant.bind(null, combatant.id)}>
               <Button
                 type="submit"
