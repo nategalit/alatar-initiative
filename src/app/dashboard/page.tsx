@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { EncounterPanel } from "./EncounterPanel"
 import { InitiativeList } from "./InitiativeList"
+import { InitiativeRoller } from "./InitiativeRoller"
 import { LibrarySearch } from "./LibrarySearch"
 import { LibraryPanel } from "./LibraryPanel"
 import { addCombatant, signOutAction } from "./actions"
@@ -73,10 +74,7 @@ export default async function DashboardPage() {
               </select>
             </div>
 
-            <div className="flex flex-col gap-1 w-20">
-              <Label htmlFor="initiative" className="text-xs">Init</Label>
-              <Input id="initiative" name="initiative" type="number" placeholder="0" className="h-8" />
-            </div>
+            <InitiativeRoller />
 
             <div className="flex flex-col gap-1 w-20">
               <Label htmlFor="hpMax" className="text-xs">HP Max</Label>

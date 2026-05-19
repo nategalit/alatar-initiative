@@ -112,6 +112,10 @@ model Combatant {
   legendaryActionsUsed Int    @default(0)
   legendaryActions     String @default("[]")
 
+  concentrating      Boolean @default(false)
+  deathSaveSuccesses Int     @default(0)
+  deathSaveFailures  Int     @default(0)
+
   notes String @default("")
 
   mapX Float?

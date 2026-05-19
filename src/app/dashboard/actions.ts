@@ -26,12 +26,19 @@ export async function addCombatant(formData: FormData) {
     parseInt(formData.get("legendaryActionsMax") as string, 10) || 0
   )
 
-  if (!name?.trim()) return
+  const base = name.trim()
+  if (!base) return
+
+  const existing = await prisma.combatant.findMany({
+    where: { userId: session.user.id, name: { startsWith: base } },
+    select: { name: true },
+  })
+  const finalName = existing.length === 0 ? base : `${base} ${existing.length + 1}`
 
   await prisma.combatant.create({
     data: {
       userId: session.user.id,
-      name: name.trim(),
+      name: finalName,
       type: type as "MONSTER" | "PLAYER" | "LAIR_ACTION",
       initiative,
       hpCurrent: hpMax,
@@ -149,10 +156,17 @@ export async function addFromLibrary(entryId: string) {
   })
   if (!entry) return
 
+  const base = entry.name
+  const existing = await prisma.combatant.findMany({
+    where: { userId: session.user.id, name: { startsWith: base } },
+    select: { name: true },
+  })
+  const finalName = existing.length === 0 ? base : `${base} ${existing.length + 1}`
+
   await prisma.combatant.create({
     data: {
       userId: session.user.id,
-      name: entry.name,
+      name: finalName,
       type: entry.type,
       shorthand: entry.shorthand,
       initiative: entry.initiative,
@@ -226,6 +240,91 @@ export async function deleteLibraryEntry(id: string) {
   await prisma.libraryEntry.deleteMany({ where: { id, userId: session.user.id } })
 
   revalidatePath("/dashboard")
+}
+
+export async function duplicateCombatant(id: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  const src = await prisma.combatant.findFirst({ where: { id, userId: session.user.id } })
+  if (!src) return
+
+  const base = src.name
+  const existing = await prisma.combatant.findMany({
+    where: { userId: session.user.id, name: { startsWith: base } },
+    select: { name: true },
+  })
+  const finalName = existing.length === 0 ? base : `${base} ${existing.length + 1}`
+
+  await prisma.combatant.create({
+    data: {
+      userId: session.user.id,
+      name: finalName,
+      type: src.type,
+      shorthand: src.shorthand,
+      initiative: src.initiative,
+      initiativeBonus: src.initiativeBonus,
+      hpCurrent: src.hpMax,
+      hpMax: src.hpMax,
+      ac: src.ac,
+      strMod: src.strMod, dexMod: src.dexMod, conMod: src.conMod,
+      intMod: src.intMod, wisMod: src.wisMod, chaMod: src.chaMod,
+      strSave: src.strSave, dexSave: src.dexSave, conSave: src.conSave,
+      intSave: src.intSave, wisSave: src.wisSave, chaSave: src.chaSave,
+      legendaryResistanceMax: src.legendaryResistanceMax,
+      legendaryActionsMax: src.legendaryActionsMax,
+      legendaryActions: src.legendaryActions,
+      notes: src.notes,
+    },
+  })
+
+  revalidatePath("/dashboard")
+}
+
+export async function reorderCombatants(orderedIds: string[]) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      prisma.combatant.updateMany({
+        where: { id, userId: session.user.id },
+        data: { initiative: (orderedIds.length - index) * 10 },
+      })
+    )
+  )
+
+  revalidatePath("/dashboard")
+}
+
+export async function updateNotes(id: string, notes: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { notes },
+  })
+}
+
+export async function updateConcentrating(id: string, concentrating: boolean) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { concentrating },
+  })
+}
+
+export async function updateDeathSaves(id: string, successes: number, failures: number) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { deathSaveSuccesses: successes, deathSaveFailures: failures },
+  })
 }
 
 export async function saveEncounter(name: string) {

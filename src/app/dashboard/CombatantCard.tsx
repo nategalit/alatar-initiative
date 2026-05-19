@@ -16,6 +16,10 @@ import {
   deleteCombatant,
   updateConditions,
   saveToLibrary,
+  duplicateCombatant,
+  updateNotes,
+  updateConcentrating,
+  updateDeathSaves,
 } from "./actions"
 import {
   CONDITION_LIST,
@@ -50,11 +54,20 @@ function fmtMod(n: number): string {
   return n >= 0 ? `+${n}` : String(n)
 }
 
-export function CombatantCard({ combatant }: { combatant: Combatant }) {
+export function CombatantCard({
+  combatant,
+  groupCount,
+  onEvent,
+}: {
+  combatant: Combatant
+  groupCount?: number
+  onEvent?: (entry: string) => void
+}) {
   const [actionUsed, setActionUsed] = useState(combatant.actionUsed)
   const [bonusActionUsed, setBonusActionUsed] = useState(combatant.bonusActionUsed)
   const [reactionUsed, setReactionUsed] = useState(combatant.reactionUsed)
   const [hpCurrent, setHpCurrent] = useState(combatant.hpCurrent)
+  const [prevHp, setPrevHp] = useState<number | null>(null)
   const [hpEditing, setHpEditing] = useState(false)
   const [hpDelta, setHpDelta] = useState("")
   const [lrMax, setLrMax] = useState(combatant.legendaryResistanceMax)
@@ -70,14 +83,17 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
     parseConditions(combatant.conditions)
   )
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [concentrating, setConcentrating] = useState(combatant.concentrating)
+  const [deathSuccesses, setDeathSuccesses] = useState(combatant.deathSaveSuccesses)
+  const [deathFailures, setDeathFailures] = useState(combatant.deathSaveFailures)
+  const [notes, setNotes] = useState(combatant.notes)
+  const [notesOpen, setNotesOpen] = useState(false)
 
   function handleToggle(field: ActionField) {
     const current =
-      field === "actionUsed"
-        ? actionUsed
-        : field === "bonusActionUsed"
-          ? bonusActionUsed
-          : reactionUsed
+      field === "actionUsed" ? actionUsed
+        : field === "bonusActionUsed" ? bonusActionUsed
+        : reactionUsed
     const next = !current
     if (field === "actionUsed") setActionUsed(next)
     else if (field === "bonusActionUsed") setBonusActionUsed(next)
@@ -94,9 +110,28 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
     const delta = parseInt(hpDelta, 10)
     if (isNaN(delta) || delta <= 0) { cancelHpEdit(); return }
     const next = Math.max(0, Math.min(combatant.hpMax, hpCurrent + sign * delta))
+    setPrevHp(hpCurrent)
     setHpCurrent(next)
     cancelHpEdit()
+    if (next > 0 && (deathSuccesses > 0 || deathFailures > 0)) {
+      setDeathSuccesses(0)
+      setDeathFailures(0)
+      void updateDeathSaves(combatant.id, 0, 0)
+    }
+    if (sign === -1) {
+      onEvent?.(`${combatant.name} took ${delta} dmg (${hpCurrent}→${next})`)
+      if (concentrating) onEvent?.(`⚠ ${combatant.name} is concentrating!`)
+    } else {
+      onEvent?.(`${combatant.name} healed ${delta} (${hpCurrent}→${next})`)
+    }
     void updateHpCurrent(combatant.id, next)
+  }
+
+  function undoHp() {
+    if (prevHp === null) return
+    void updateHpCurrent(combatant.id, prevHp)
+    setHpCurrent(prevHp)
+    setPrevHp(null)
   }
 
   function handleLrUsed() {
@@ -157,17 +192,44 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
   }
 
   function handlePickerToggle(key: string) {
+    const wasActive = hasCondition(conditions, key)
+    const cond = CONDITION_LIST.find((c) => c.key === key)
     applyConditions(toggleCondition(conditions, key))
+    if (cond) {
+      onEvent?.(wasActive
+        ? `${combatant.name} lost ${cond.label}`
+        : `${combatant.name} gained ${cond.label}`)
+    }
   }
 
   function handleExhaustionStep(delta: number) {
     const current = getExhaustionLevel(conditions)
     const next = current + delta
-    if (next <= 0) {
-      applyConditions(setExhaustionLevel(conditions, 0))
-    } else {
-      applyConditions(setExhaustionLevel(conditions, next))
-    }
+    applyConditions(setExhaustionLevel(conditions, next <= 0 ? 0 : next))
+  }
+
+  function handleConcentrating() {
+    const next = !concentrating
+    setConcentrating(next)
+    void updateConcentrating(combatant.id, next)
+  }
+
+  function handleDeathSuccess() {
+    const next = Math.min(3, deathSuccesses + 1)
+    setDeathSuccesses(next)
+    void updateDeathSaves(combatant.id, next, deathFailures)
+  }
+
+  function handleDeathFailure() {
+    const next = Math.min(3, deathFailures + 1)
+    setDeathFailures(next)
+    void updateDeathSaves(combatant.id, deathSuccesses, next)
+  }
+
+  function handleDeathReset() {
+    setDeathSuccesses(0)
+    setDeathFailures(0)
+    void updateDeathSaves(combatant.id, 0, 0)
   }
 
   const mods = [
@@ -199,17 +261,23 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
         </div>
 
         <div className="flex-1 min-w-0 space-y-2">
-          {/* Row 1: Name / HP / AC / Delete */}
+          {/* Row 1: Name / HP / AC / buttons */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-bold truncate uppercase tracking-wide text-sm leading-tight">
                   {combatant.name}
                 </p>
+                {groupCount && groupCount > 1 && (
+                  <span className="text-xs text-muted-foreground shrink-0">×{groupCount}</span>
+                )}
                 {hasDeadCondition && (
                   <span className="text-xs font-bold text-white bg-red-900 px-1.5 py-0.5 rounded shrink-0">
                     DEAD
                   </span>
+                )}
+                {concentrating && (
+                  <span className="text-xs font-medium text-cyan-600 shrink-0" title="Concentrating">◎</span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">{TYPE_LABEL[combatant.type]}</p>
@@ -246,39 +314,39 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
                 </Button>
               </div>
             ) : (
-              <button
-                onClick={() => setHpEditing(true)}
-                title="Click to apply damage or healing"
-                className={`text-sm shrink-0 hover:underline cursor-pointer ${isDead ? "text-destructive font-bold" : ""}`}
-              >
-                ♥ {hpCurrent}/{combatant.hpMax}
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setHpEditing(true)}
+                  title="Click to apply damage or healing"
+                  className={`text-sm hover:underline cursor-pointer ${isDead ? "text-destructive font-bold" : ""}`}
+                >
+                  ♥ {hpCurrent}/{combatant.hpMax}
+                </button>
+                {prevHp !== null && (
+                  <button
+                    onClick={undoHp}
+                    title="Undo last HP change"
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Undo
+                  </button>
+                )}
+              </div>
             )}
 
             <span className="text-sm text-muted-foreground shrink-0">🛡 {combatant.ac}</span>
 
             <form action={saveToLibrary.bind(null, combatant.id)}>
-              <Button
-                type="submit"
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                title={`Save ${combatant.name} to library`}
-                aria-label={`Save ${combatant.name} to library`}
-              >
-                ★
-              </Button>
+              <Button type="submit" variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                title={`Save ${combatant.name} to library`} aria-label={`Save ${combatant.name} to library`}>★</Button>
+            </form>
+            <form action={duplicateCombatant.bind(null, combatant.id)}>
+              <Button type="submit" variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                title={`Duplicate ${combatant.name}`} aria-label={`Duplicate ${combatant.name}`}>⧉</Button>
             </form>
             <form action={deleteCombatant.bind(null, combatant.id)}>
-              <Button
-                type="submit"
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                aria-label={`Remove ${combatant.name}`}
-              >
-                ×
-              </Button>
+              <Button type="submit" variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                aria-label={`Remove ${combatant.name}`}>×</Button>
             </form>
           </div>
 
@@ -292,71 +360,54 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
             ))}
           </div>
 
-          {/* Row 3: Action economy + Legendary resistance */}
+          {/* Row 3: Action economy + Concentration + LR */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => handleToggle("actionUsed")}
               className={`px-2 py-0.5 rounded text-xs font-bold transition-opacity ${
-                actionUsed
-                  ? "opacity-40 bg-muted text-muted-foreground"
-                  : "bg-blue-600 text-white"
+                actionUsed ? "opacity-40 bg-muted text-muted-foreground" : "bg-blue-600 text-white"
               }`}
-            >
-              ACTION
-            </button>
+            >ACTION</button>
             <button
               onClick={() => handleToggle("bonusActionUsed")}
               className={`px-2 py-0.5 rounded text-xs font-bold transition-opacity ${
-                bonusActionUsed
-                  ? "opacity-40 bg-muted text-muted-foreground"
-                  : "bg-rose-600 text-white"
+                bonusActionUsed ? "opacity-40 bg-muted text-muted-foreground" : "bg-rose-600 text-white"
               }`}
-            >
-              BONUS
-            </button>
+            >BONUS</button>
             <button
               onClick={() => handleToggle("reactionUsed")}
               className={`px-2 py-0.5 rounded text-xs font-bold transition-opacity ${
-                reactionUsed
-                  ? "opacity-40 bg-muted text-muted-foreground"
-                  : "bg-purple-600 text-white"
+                reactionUsed ? "opacity-40 bg-muted text-muted-foreground" : "bg-purple-600 text-white"
+              }`}
+            >REACTION</button>
+
+            <button
+              onClick={handleConcentrating}
+              title={concentrating ? "Click to end concentration" : "Click to mark concentrating"}
+              className={`px-2 py-0.5 rounded text-xs font-bold border transition-colors ${
+                concentrating
+                  ? "border-cyan-500 text-cyan-700 bg-cyan-50"
+                  : "border-muted-foreground text-muted-foreground hover:border-foreground"
               }`}
             >
-              REACTION
+              {concentrating ? "◎ CONC" : "○ CONC"}
             </button>
 
-            {/* Legendary resistance — monsters only */}
             {combatant.type === CombatantType.MONSTER && (
               <div className="flex items-center gap-1 ml-auto text-sm">
                 <span className="text-xs text-muted-foreground font-medium mr-0.5">LR</span>
                 {Array.from({ length: lrMax }).map((_, i) => {
                   const filled = i < lrMax - lrUsed
                   return (
-                    <button
-                      key={i}
-                      onClick={filled ? handleLrUsed : undefined}
-                      disabled={!filled}
+                    <button key={i} onClick={filled ? handleLrUsed : undefined} disabled={!filled}
                       title={filled ? "Use legendary resistance" : "Spent"}
-                      className={filled ? "text-amber-500 hover:text-amber-600 cursor-pointer" : "text-muted-foreground cursor-default"}
-                    >
+                      className={filled ? "text-amber-500 hover:text-amber-600 cursor-pointer" : "text-muted-foreground cursor-default"}>
                       {filled ? "●" : "○"}
                     </button>
                   )
                 })}
-                <button
-                  onClick={() => handleLrMax(-1)}
-                  title="Decrease legendary resistance max"
-                  className="text-xs text-muted-foreground hover:text-foreground w-4 text-center"
-                >
-                  −
-                </button>
-                <button
-                  onClick={() => handleLrMax(1)}
-                  title="Increase legendary resistance max"
-                  className="text-xs text-muted-foreground hover:text-foreground w-4 text-center"
-                >
-                  +
-                </button>
+                <button onClick={() => handleLrMax(-1)} className="text-xs text-muted-foreground hover:text-foreground w-4 text-center">−</button>
+                <button onClick={() => handleLrMax(1)} className="text-xs text-muted-foreground hover:text-foreground w-4 text-center">+</button>
               </div>
             )}
           </div>
@@ -364,30 +415,21 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
           {/* Row 4: Conditions */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {activeConditions.map((cond) => (
-              <button
-                key={cond.key}
-                onClick={() => handlePickerToggle(cond.key)}
+              <button key={cond.key} onClick={() => handlePickerToggle(cond.key)}
                 title={`Remove ${cond.label}`}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-white ${cond.color} hover:opacity-80 transition-opacity`}
-              >
-                {cond.key === "exhaustion"
-                  ? `Exhaustion ${exhaustionLevel}`
-                  : cond.label}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-white ${cond.color} hover:opacity-80 transition-opacity`}>
+                {cond.key === "exhaustion" ? `Exhaustion ${exhaustionLevel}` : cond.label}
                 <span className="opacity-70">×</span>
               </button>
             ))}
 
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-              <PopoverTrigger
-                title="Add condition"
-                className="w-6 h-6 rounded border border-dashed border-muted-foreground text-muted-foreground text-xs hover:border-foreground hover:text-foreground transition-colors flex items-center justify-center"
-              >
+              <PopoverTrigger title="Add condition"
+                className="w-6 h-6 rounded border border-dashed border-muted-foreground text-muted-foreground text-xs hover:border-foreground hover:text-foreground transition-colors flex items-center justify-center">
                 +
               </PopoverTrigger>
               <PopoverContent className="w-72 p-3" align="start">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                  Conditions
-                </p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Conditions</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {CONDITION_LIST.map((cond) => {
                     const active = hasCondition(conditions, cond.key)
@@ -395,38 +437,17 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
                     return (
                       <div key={cond.key} title={cond.description}>
                         {isExhaustion && active ? (
-                          <div
-                            className={`flex items-center justify-between px-2 py-1 rounded text-xs font-medium text-white ${cond.color}`}
-                          >
-                            <button
-                              onClick={() => handleExhaustionStep(-1)}
-                              className="hover:opacity-80 w-4 text-center"
-                            >
-                              −
-                            </button>
-                            <button
-                              onClick={() => handlePickerToggle(cond.key)}
-                              className="hover:opacity-80 font-bold"
-                            >
-                              {exhaustionLevel}
-                            </button>
-                            <button
-                              onClick={() => handleExhaustionStep(1)}
-                              disabled={exhaustionLevel >= 6}
-                              className="hover:opacity-80 w-4 text-center disabled:opacity-40"
-                            >
-                              +
-                            </button>
+                          <div className={`flex items-center justify-between px-2 py-1 rounded text-xs font-medium text-white ${cond.color}`}>
+                            <button onClick={() => handleExhaustionStep(-1)} className="hover:opacity-80 w-4 text-center">−</button>
+                            <button onClick={() => handlePickerToggle(cond.key)} className="hover:opacity-80 font-bold">{exhaustionLevel}</button>
+                            <button onClick={() => handleExhaustionStep(1)} disabled={exhaustionLevel >= 6} className="hover:opacity-80 w-4 text-center disabled:opacity-40">+</button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => handlePickerToggle(cond.key)}
+                          <button onClick={() => handlePickerToggle(cond.key)}
                             className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
-                              active
-                                ? `text-white ${cond.color} hover:opacity-80`
+                              active ? `text-white ${cond.color} hover:opacity-80`
                                 : "border border-muted-foreground text-muted-foreground hover:border-foreground hover:text-foreground"
-                            }`}
-                          >
+                            }`}>
                             {cond.label}
                           </button>
                         )}
@@ -438,98 +459,97 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
             </Popover>
           </div>
 
-          {/* Row 5: Legendary actions — monsters only, when pool > 0 */}
+          {/* Row 5: Legendary actions — monsters only */}
           {combatant.type === CombatantType.MONSTER && laMax > 0 && (
             <div className="space-y-1.5 pt-1 border-t border-dashed border-muted-foreground/30">
-              {/* Pool row */}
               <div className="flex items-center gap-1 flex-wrap">
                 <span className="text-xs text-muted-foreground font-medium mr-0.5">LA</span>
-                {Array.from({ length: laMax }).map((_, i) => {
-                  const spent = i < laUsed
-                  return (
-                    <span
-                      key={i}
-                      className={spent ? "text-muted-foreground" : "text-amber-500"}
-                    >
-                      {spent ? "○" : "●"}
-                    </span>
-                  )
-                })}
-                <button
-                  onClick={() => handleLaMax(-1)}
-                  className="text-xs text-muted-foreground hover:text-foreground w-4 text-center"
-                  title="Decrease pool max"
-                >−</button>
-                <button
-                  onClick={() => handleLaMax(1)}
-                  className="text-xs text-muted-foreground hover:text-foreground w-4 text-center"
-                  title="Increase pool max"
-                >+</button>
-                <button
-                  onClick={handleLaReset}
-                  className="ml-1 text-xs text-muted-foreground hover:text-foreground px-1"
-                  title="Reset legendary action pool"
-                >↺</button>
+                {Array.from({ length: laMax }).map((_, i) => (
+                  <span key={i} className={i < laUsed ? "text-muted-foreground" : "text-amber-500"}>
+                    {i < laUsed ? "○" : "●"}
+                  </span>
+                ))}
+                <button onClick={() => handleLaMax(-1)} className="text-xs text-muted-foreground hover:text-foreground w-4 text-center" title="Decrease pool max">−</button>
+                <button onClick={() => handleLaMax(1)} className="text-xs text-muted-foreground hover:text-foreground w-4 text-center" title="Increase pool max">+</button>
+                <button onClick={handleLaReset} className="ml-1 text-xs text-muted-foreground hover:text-foreground px-1" title="Reset pool">↺</button>
               </div>
-
-              {/* Named action buttons */}
               {laList.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {laList.map((action, i) => {
                     const canUse = laUsed + action.cost <= laMax
                     return (
                       <div key={i} className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => handleLaUse(action.cost)}
-                          disabled={!canUse}
+                        <button onClick={() => handleLaUse(action.cost)} disabled={!canUse}
                           className={`px-2 py-0.5 rounded text-xs font-medium border transition-opacity ${
-                            canUse
-                              ? "border-amber-500 text-amber-700 hover:bg-amber-50"
-                              : "opacity-40 border-muted-foreground text-muted-foreground cursor-default"
-                          }`}
-                        >
+                            canUse ? "border-amber-500 text-amber-700 hover:bg-amber-50" : "opacity-40 border-muted-foreground text-muted-foreground cursor-default"
+                          }`}>
                           {action.name} ({action.cost})
                         </button>
-                        <button
-                          onClick={() => handleLaRemove(i)}
-                          className="text-muted-foreground hover:text-destructive text-xs w-4 text-center"
-                          title={`Remove ${action.name}`}
-                        >×</button>
+                        <button onClick={() => handleLaRemove(i)} className="text-muted-foreground hover:text-destructive text-xs w-4 text-center" title={`Remove ${action.name}`}>×</button>
                       </div>
                     )
                   })}
                 </div>
               )}
-
-              {/* Add action form */}
               <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={laNewName}
-                  onChange={(e) => setLaNewName(e.target.value)}
+                <input type="text" value={laNewName} onChange={(e) => setLaNewName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleLaAdd() }}
                   placeholder="Action name…"
-                  className="h-6 text-xs rounded border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring flex-1 min-w-0"
-                />
-                <input
-                  type="number"
-                  value={laNewCost}
-                  onChange={(e) => setLaNewCost(Math.max(1, parseInt(e.target.value) || 1))}
-                  min={1}
-                  max={laMax || 3}
-                  className="h-6 text-xs rounded border border-input bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring w-10 text-center"
-                  title="Action cost"
-                />
-                <button
-                  onClick={handleLaAdd}
-                  disabled={!laNewName.trim()}
-                  className="h-6 px-2 text-xs rounded border border-input bg-background hover:bg-accent disabled:opacity-40"
-                >
-                  + Add
-                </button>
+                  className="h-6 text-xs rounded border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring flex-1 min-w-0" />
+                <input type="number" value={laNewCost} onChange={(e) => setLaNewCost(Math.max(1, parseInt(e.target.value) || 1))}
+                  min={1} max={laMax || 3}
+                  className="h-6 text-xs rounded border border-input bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring w-10 text-center" title="Action cost" />
+                <button onClick={handleLaAdd} disabled={!laNewName.trim()}
+                  className="h-6 px-2 text-xs rounded border border-input bg-background hover:bg-accent disabled:opacity-40">+ Add</button>
               </div>
             </div>
           )}
+
+          {/* Row 6: Death saves — players only, when downed */}
+          {combatant.type === CombatantType.PLAYER && isDead && (
+            <div className="flex items-center gap-2 pt-1 border-t border-dashed border-muted-foreground/30 flex-wrap">
+              <span className="text-xs text-muted-foreground font-medium">☠ Death Saves</span>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <span key={i} className={i < deathSuccesses ? "text-green-500 text-sm" : "text-muted-foreground text-sm"}>
+                    {i < deathSuccesses ? "●" : "○"}
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <span key={i} className={i < deathFailures ? "text-red-500 text-sm" : "text-muted-foreground text-sm"}>
+                    {i < deathFailures ? "●" : "○"}
+                  </span>
+                ))}
+              </div>
+              <button onClick={handleDeathSuccess} disabled={deathSuccesses >= 3}
+                className="px-2 py-0.5 rounded text-xs border border-green-500 text-green-700 hover:bg-green-50 disabled:opacity-40">✓ Success</button>
+              <button onClick={handleDeathFailure} disabled={deathFailures >= 3}
+                className="px-2 py-0.5 rounded text-xs border border-red-500 text-red-700 hover:bg-red-50 disabled:opacity-40">✗ Failure</button>
+              <button onClick={handleDeathReset} className="text-xs text-muted-foreground hover:text-foreground">↺</button>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <button
+              onClick={() => setNotesOpen(!notesOpen)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {notesOpen ? "▾" : "▸"} Notes{notes ? " ✎" : ""}
+            </button>
+            {notesOpen && (
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => void updateNotes(combatant.id, notes)}
+                placeholder="Tactics, motivations, session notes…"
+                rows={2}
+                className="mt-1 w-full text-xs rounded border border-input bg-background px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              />
+            )}
+          </div>
         </div>
 
         <MiniMap
