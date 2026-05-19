@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { auth, signOut } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { toSnapshot, type CombatantSnapshot } from "@/lib/encounter"
 
 type ActionField = "actionUsed" | "bonusActionUsed" | "reactionUsed"
 
@@ -99,6 +100,85 @@ export async function updateConditions(id: string, conditions: string[]) {
     where: { id, userId: session.user.id },
     data: { conditions: JSON.stringify(conditions) },
   })
+}
+
+export async function saveEncounter(name: string) {
+  const session = await auth()
+  if (!session?.user?.id || !name.trim()) return
+
+  const combatants = await prisma.combatant.findMany({
+    where: { userId: session.user.id },
+    orderBy: { initiative: "desc" },
+  })
+
+  await prisma.encounter.create({
+    data: {
+      userId: session.user.id,
+      name: name.trim(),
+      snapshot: JSON.stringify(combatants.map(toSnapshot)),
+    },
+  })
+
+  revalidatePath("/dashboard")
+}
+
+export async function loadEncounter(id: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  const encounter = await prisma.encounter.findFirst({
+    where: { id, userId: session.user.id },
+  })
+  if (!encounter) return
+
+  const snapshots: CombatantSnapshot[] = JSON.parse(encounter.snapshot)
+
+  await prisma.combatant.deleteMany({ where: { userId: session.user.id } })
+
+  if (snapshots.length > 0) {
+    await prisma.combatant.createMany({
+      data: snapshots.map((s) => ({ ...s, userId: session.user.id })),
+    })
+  }
+
+  revalidatePath("/dashboard")
+}
+
+export async function deleteEncounter(id: string) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.encounter.deleteMany({ where: { id, userId: session.user.id } })
+
+  revalidatePath("/dashboard")
+}
+
+export async function importEncounter(formData: FormData) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  const file = formData.get("file") as File | null
+  if (!file) return
+
+  let snapshots: CombatantSnapshot[]
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    if (!Array.isArray(parsed)) return
+    snapshots = parsed
+  } catch {
+    return
+  }
+
+  await prisma.combatant.deleteMany({ where: { userId: session.user.id } })
+
+  if (snapshots.length > 0) {
+    await prisma.combatant.createMany({
+      data: snapshots.map((s) => ({ ...s, userId: session.user.id })),
+    })
+  }
+
+  revalidatePath("/dashboard")
 }
 
 export async function signOutAction() {

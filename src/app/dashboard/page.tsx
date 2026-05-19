@@ -5,16 +5,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CombatantCard } from "./CombatantCard"
+import { EncounterPanel } from "./EncounterPanel"
 import { addCombatant, signOutAction } from "./actions"
 
 export default async function DashboardPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const combatants = await prisma.combatant.findMany({
-    where: { userId: session.user.id },
-    orderBy: { initiative: "desc" },
-  })
+  const [combatants, encounters] = await Promise.all([
+    prisma.combatant.findMany({
+      where: { userId: session.user.id },
+      orderBy: { initiative: "desc" },
+    }),
+    prisma.encounter.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+    }),
+  ])
 
   return (
     <div className="min-h-screen bg-background">
@@ -109,6 +116,14 @@ export default async function DashboardPage() {
               ))}
             </ul>
           )}
+        </section>
+
+        {/* Encounters */}
+        <section>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
+            Saved Encounters
+          </h2>
+          <EncounterPanel encounters={encounters} combatants={combatants} />
         </section>
       </main>
     </div>
