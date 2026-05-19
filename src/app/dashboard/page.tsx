@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { CombatantCard } from "./CombatantCard"
 import { EncounterPanel } from "./EncounterPanel"
+import { InitiativeList } from "./InitiativeList"
 import { LibrarySearch } from "./LibrarySearch"
 import { LibraryPanel } from "./LibraryPanel"
 import { addCombatant, signOutAction } from "./actions"
@@ -120,23 +120,7 @@ export default async function DashboardPage() {
 
         {/* Initiative list */}
         <section>
-          <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Initiative Order — {combatants.length} combatant{combatants.length !== 1 ? "s" : ""}
-          </h2>
-
-          {combatants.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No combatants yet. Add one above to begin.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {combatants.map((c) => (
-                <li key={c.id}>
-                  <CombatantCard combatant={c} />
-                </li>
-              ))}
-            </ul>
-          )}
+          <InitiativeList combatants={combatants} />
         </section>
 
         {/* Encounters */}
