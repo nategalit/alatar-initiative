@@ -12,7 +12,7 @@ export async function addCombatant(formData: FormData) {
 
   const name = formData.get("name") as string
   const type = (formData.get("type") as string) || "MONSTER"
-  const initiative = parseInt(formData.get("initiative") as string, 10) || 0
+  const initiative = type === "LAIR_ACTION" ? 20 : (parseInt(formData.get("initiative") as string, 10) || 0)
   const hpMax = Math.max(1, parseInt(formData.get("hpMax") as string, 10) || 1)
   const ac = Math.max(0, parseInt(formData.get("ac") as string, 10) || 10)
   const legendaryResistanceMax = Math.max(0, parseInt(formData.get("legendaryResistanceMax") as string, 10) || 0)

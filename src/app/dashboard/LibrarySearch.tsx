@@ -23,13 +23,15 @@ export function LibrarySearch({ entries }: { entries: LibraryEntry[] }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const q = query.trim().toLowerCase()
-  const matches = q
-    ? entries.filter(
-        (e) =>
-          e.name.toLowerCase().includes(q) ||
-          (e.shorthand && e.shorthand.toLowerCase().includes(q))
-      ).slice(0, 8)
-    : []
+  const matches = (
+    q
+      ? entries.filter(
+          (e) =>
+            e.name.toLowerCase().includes(q) ||
+            (e.shorthand && e.shorthand.toLowerCase().includes(q))
+        )
+      : entries
+  ).slice(0, 8)
 
   async function handleSelect(entry: LibraryEntry) {
     setQuery("")

@@ -12,9 +12,9 @@ export function InitiativeRoller() {
   }
 
   return (
-    <div className="flex flex-col gap-1 w-24">
+    <div className="flex flex-col gap-1 w-20">
       <Label htmlFor="initiative" className="text-xs">Init</Label>
-      <div className="flex gap-1">
+      <div className="flex gap-0.5">
         <Input
           id="initiative"
           name="initiative"
@@ -22,13 +22,13 @@ export function InitiativeRoller() {
           placeholder="0"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="h-8 w-14"
+          className="h-8 w-11"
         />
         <button
           type="button"
           onClick={roll}
           title="Roll d20"
-          className="h-8 w-8 rounded border border-input bg-background text-sm hover:bg-accent flex items-center justify-center"
+          className="h-8 w-8 rounded border border-input bg-background text-sm hover:bg-accent flex items-center justify-center shrink-0"
         >
           🎲
         </button>

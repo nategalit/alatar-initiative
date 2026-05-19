@@ -43,20 +43,20 @@ export default async function DashboardPage() {
           </h2>
           <LibrarySearch entries={libraryEntries} />
           <form action={addCombatant} className="space-y-3">
-            {/* Primary fields row */}
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex flex-col gap-1 min-w-36">
+            {/* Primary fields */}
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex flex-col gap-1 w-32">
                 <Label htmlFor="name" className="text-xs">Name</Label>
                 <Input id="name" name="name" placeholder="Goblin" required className="h-8" />
               </div>
 
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 w-24">
                 <Label htmlFor="type" className="text-xs">Type</Label>
                 <select
                   id="type"
                   name="type"
                   defaultValue="MONSTER"
-                  className="h-8 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="MONSTER">Monster</option>
                   <option value="PLAYER">Player</option>
@@ -66,12 +66,12 @@ export default async function DashboardPage() {
 
               <InitiativeRoller />
 
-              <div className="flex flex-col gap-1 w-20">
+              <div className="flex flex-col gap-1 w-16">
                 <Label htmlFor="hpMax" className="text-xs">HP Max</Label>
                 <Input id="hpMax" name="hpMax" type="number" placeholder="1" min="1" className="h-8" />
               </div>
 
-              <div className="flex flex-col gap-1 w-14">
+              <div className="flex flex-col gap-1 w-12">
                 <Label htmlFor="ac" className="text-xs">AC</Label>
                 <Input id="ac" name="ac" type="number" placeholder="10" min="0" className="h-8" />
               </div>
@@ -85,15 +85,13 @@ export default async function DashboardPage() {
                 <Label htmlFor="legendaryActionsMax" className="text-xs">LA</Label>
                 <Input id="legendaryActionsMax" name="legendaryActionsMax" type="number" placeholder="0" min="0" className="h-8" />
               </div>
-
-              <Button type="submit" size="sm" className="h-8">Add</Button>
             </div>
 
             {/* Stat modifier row */}
-            <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex gap-2 items-end">
               {STAT_FIELDS.map(({ id, label }) => (
-                <div key={id} className="flex flex-col gap-1 w-12">
-                  <Label htmlFor={id} className="text-xs text-center">{label}</Label>
+                <div key={id} className="flex flex-col items-center gap-1 w-12">
+                  <Label htmlFor={id} className="text-xs">{label}</Label>
                   <Input
                     id={id}
                     name={id}
@@ -104,6 +102,11 @@ export default async function DashboardPage() {
                 </div>
               ))}
             </div>
+
+            {/* Full-width submit */}
+            <Button type="submit" className="w-full h-9 text-sm font-medium">
+              Add to Initiative
+            </Button>
           </form>
         </section>
 
