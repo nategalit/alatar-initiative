@@ -22,15 +22,15 @@ import { CombatantCard } from "./CombatantCard"
 import { reorderCombatants } from "./actions"
 
 function useLocalStorage<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initial
+  const [value, setValue] = useState<T>(initial)
+
+  useEffect(() => {
     try {
       const item = localStorage.getItem(key)
-      return item !== null ? (JSON.parse(item) as T) : initial
-    } catch {
-      return initial
-    }
-  })
+      if (item !== null) setValue(JSON.parse(item) as T)
+    } catch { /* ignore */ }
+  }, [key])
+
   function set(next: T) {
     setValue(next)
     try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
