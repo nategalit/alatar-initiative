@@ -5,12 +5,22 @@ import type { Combatant } from "@/generated/prisma/client"
 import { CombatantType } from "@/generated/prisma/enums"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   toggleCombatantAction,
   updateHpCurrent,
   updateLegendaryResistance,
   deleteCombatant,
+  updateConditions,
 } from "./actions"
+import {
+  CONDITION_LIST,
+  parseConditions,
+  hasCondition,
+  getExhaustionLevel,
+  toggleCondition,
+  setExhaustionLevel,
+} from "@/lib/conditions"
 
 type ActionField = "actionUsed" | "bonusActionUsed" | "reactionUsed"
 
@@ -45,6 +55,10 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
   const [hpDelta, setHpDelta] = useState("")
   const [lrMax, setLrMax] = useState(combatant.legendaryResistanceMax)
   const [lrUsed, setLrUsed] = useState(combatant.legendaryResistanceUsed)
+  const [conditions, setConditions] = useState<string[]>(() =>
+    parseConditions(combatant.conditions)
+  )
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   function handleToggle(field: ActionField) {
     const current =
@@ -89,6 +103,25 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
     void updateLegendaryResistance(combatant.id, nextMax, nextUsed)
   }
 
+  function applyConditions(next: string[]) {
+    setConditions(next)
+    void updateConditions(combatant.id, next)
+  }
+
+  function handlePickerToggle(key: string) {
+    applyConditions(toggleCondition(conditions, key))
+  }
+
+  function handleExhaustionStep(delta: number) {
+    const current = getExhaustionLevel(conditions)
+    const next = current + delta
+    if (next <= 0) {
+      applyConditions(setExhaustionLevel(conditions, 0))
+    } else {
+      applyConditions(setExhaustionLevel(conditions, next))
+    }
+  }
+
   const mods = [
     { label: "STR", val: combatant.strMod },
     { label: "DEX", val: combatant.dexMod },
@@ -99,9 +132,16 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
   ]
 
   const isDead = hpCurrent === 0
+  const hasDeadCondition = hasCondition(conditions, "dead")
+  const activeConditions = CONDITION_LIST.filter((c) => hasCondition(conditions, c.key))
+  const exhaustionLevel = getExhaustionLevel(conditions)
 
   return (
-    <div className={`rounded-lg border bg-card border-l-4 ${BORDER[combatant.type]} px-4 py-3`}>
+    <div
+      className={`rounded-lg border bg-card border-l-4 ${BORDER[combatant.type]} px-4 py-3 transition-opacity ${
+        hasDeadCondition ? "opacity-50" : ""
+      }`}
+    >
       <div className="flex items-start gap-3">
         {/* Initiative badge */}
         <div
@@ -114,9 +154,16 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
           {/* Row 1: Name / HP / AC / Delete */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex-1 min-w-0">
-              <p className="font-bold truncate uppercase tracking-wide text-sm leading-tight">
-                {combatant.name}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-bold truncate uppercase tracking-wide text-sm leading-tight">
+                  {combatant.name}
+                </p>
+                {hasDeadCondition && (
+                  <span className="text-xs font-bold text-white bg-red-900 px-1.5 py-0.5 rounded shrink-0">
+                    DEAD
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">{TYPE_LABEL[combatant.type]}</p>
             </div>
 
@@ -252,6 +299,83 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Row 4: Conditions */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {activeConditions.map((cond) => (
+              <button
+                key={cond.key}
+                onClick={() => handlePickerToggle(cond.key)}
+                title={`Remove ${cond.label}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-white ${cond.color} hover:opacity-80 transition-opacity`}
+              >
+                {cond.key === "exhaustion"
+                  ? `Exhaustion ${exhaustionLevel}`
+                  : cond.label}
+                <span className="opacity-70">×</span>
+              </button>
+            ))}
+
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger
+                title="Add condition"
+                className="w-6 h-6 rounded border border-dashed border-muted-foreground text-muted-foreground text-xs hover:border-foreground hover:text-foreground transition-colors flex items-center justify-center"
+              >
+                +
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-3" align="start">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                  Conditions
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {CONDITION_LIST.map((cond) => {
+                    const active = hasCondition(conditions, cond.key)
+                    const isExhaustion = cond.key === "exhaustion"
+                    return (
+                      <div key={cond.key} title={cond.description}>
+                        {isExhaustion && active ? (
+                          <div
+                            className={`flex items-center justify-between px-2 py-1 rounded text-xs font-medium text-white ${cond.color}`}
+                          >
+                            <button
+                              onClick={() => handleExhaustionStep(-1)}
+                              className="hover:opacity-80 w-4 text-center"
+                            >
+                              −
+                            </button>
+                            <button
+                              onClick={() => handlePickerToggle(cond.key)}
+                              className="hover:opacity-80 font-bold"
+                            >
+                              {exhaustionLevel}
+                            </button>
+                            <button
+                              onClick={() => handleExhaustionStep(1)}
+                              disabled={exhaustionLevel >= 6}
+                              className="hover:opacity-80 w-4 text-center disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handlePickerToggle(cond.key)}
+                            className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              active
+                                ? `text-white ${cond.color} hover:opacity-80`
+                                : "border border-muted-foreground text-muted-foreground hover:border-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {cond.label}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </div>

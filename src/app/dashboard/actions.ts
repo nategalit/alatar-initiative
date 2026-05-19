@@ -91,6 +91,16 @@ export async function updateLegendaryResistance(
   })
 }
 
+export async function updateConditions(id: string, conditions: string[]) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { conditions: JSON.stringify(conditions) },
+  })
+}
+
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" })
 }
