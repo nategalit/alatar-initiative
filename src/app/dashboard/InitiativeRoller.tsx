@@ -12,7 +12,7 @@ export function InitiativeRoller() {
   }
 
   return (
-    <div className="flex flex-col gap-1 w-20">
+    <div className="flex flex-col gap-1 w-24">
       <Label htmlFor="initiative" className="text-xs">Init</Label>
       <div className="flex gap-0.5">
         <Input
@@ -22,7 +22,7 @@ export function InitiativeRoller() {
           placeholder="0"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="h-8 w-11"
+          className="h-8 w-14"
         />
         <button
           type="button"

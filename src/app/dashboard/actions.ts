@@ -314,7 +314,7 @@ export async function updateDeathSaves(id: string, successes: number, failures: 
   })
 }
 
-export async function saveEncounter(name: string) {
+export async function saveEncounter(name: string, log: string[] = []) {
   const userId = await getDefaultUserId()
   if (!name.trim()) return
 
@@ -327,7 +327,7 @@ export async function saveEncounter(name: string) {
     data: {
       userId,
       name: name.trim(),
-      snapshot: JSON.stringify(combatants.map(toSnapshot)),
+      snapshot: JSON.stringify({ combatants: combatants.map(toSnapshot), log }),
     },
   })
 
@@ -340,7 +340,8 @@ export async function loadEncounter(id: string) {
   const encounter = await prisma.encounter.findFirst({ where: { id, userId } })
   if (!encounter) return
 
-  const snapshots: CombatantSnapshot[] = JSON.parse(encounter.snapshot)
+  const parsed = JSON.parse(encounter.snapshot)
+  const snapshots: CombatantSnapshot[] = Array.isArray(parsed) ? parsed : (parsed.combatants ?? [])
 
   await prisma.combatant.deleteMany({ where: { userId } })
 

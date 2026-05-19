@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   DndContext,
   closestCenter,
@@ -124,6 +124,13 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
   const allPositions: MapPosition[] = combatants
     .filter((c) => positions[c.id] != null)
     .map((c) => ({ id: c.id, x: positions[c.id]!.x, y: positions[c.id]!.y, type: c.type }))
+
+  // Persist log to localStorage so EncounterPanel can read it when saving
+  const logRef = useRef(log)
+  useEffect(() => {
+    logRef.current = log
+    try { localStorage.setItem("alatar-combat-log", JSON.stringify(log)) } catch { /* ignore */ }
+  }, [log])
 
   const appendLog = useCallback((entry: string) => {
     setLog((prev) => [entry, ...prev].slice(0, MAX_LOG))
@@ -263,9 +270,20 @@ export function InitiativeList({ combatants: initial }: { combatants: Combatant[
             <span>{logOpen ? "▲" : "▼"}</span>
           </button>
           {logOpen && (
-            <pre className="px-3 pb-3 text-xs text-muted-foreground whitespace-pre-wrap leading-5 max-h-48 overflow-y-auto">
-              {log.join("\n")}
-            </pre>
+            <>
+              <pre className="px-3 pt-1 text-xs text-muted-foreground whitespace-pre-wrap leading-5 max-h-48 overflow-y-auto">
+                {log.join("\n")}
+              </pre>
+              <div className="px-3 pb-2 pt-1 flex justify-end border-t border-muted-foreground/20 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setLog([])}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Clear log
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}

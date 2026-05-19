@@ -40,7 +40,12 @@ export function EncounterPanel({
 
   async function handleSave() {
     if (!saveName.trim()) return
-    await saveEncounter(saveName)
+    let log: string[] = []
+    try {
+      const raw = localStorage.getItem("alatar-combat-log")
+      if (raw) log = JSON.parse(raw) as string[]
+    } catch { /* ignore */ }
+    await saveEncounter(saveName, log)
     setSaveName("")
   }
 
@@ -98,7 +103,10 @@ export function EncounterPanel({
         <ul className="space-y-1.5">
           {encounters.map((enc) => {
             let count = 0
-            try { count = (JSON.parse(enc.snapshot) as unknown[]).length } catch { /* ignore */ }
+            try {
+              const p = JSON.parse(enc.snapshot)
+              count = Array.isArray(p) ? p.length : (p.combatants?.length ?? 0)
+            } catch { /* ignore */ }
             const saved = new Date(enc.createdAt).toLocaleDateString(undefined, {
               month: "short",
               day: "numeric",

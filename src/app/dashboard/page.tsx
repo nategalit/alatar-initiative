@@ -71,7 +71,7 @@ export default async function DashboardPage() {
                 <Input id="hpMax" name="hpMax" type="number" placeholder="1" min="1" className="h-8" />
               </div>
 
-              <div className="flex flex-col gap-1 w-12">
+              <div className="flex flex-col gap-1 w-16">
                 <Label htmlFor="ac" className="text-xs">AC</Label>
                 <Input id="ac" name="ac" type="number" placeholder="10" min="0" className="h-8" />
               </div>
@@ -88,7 +88,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Stat modifier row */}
-            <div className="flex gap-2 items-end">
+            <div className="flex gap-2 items-end justify-center">
               {STAT_FIELDS.map(({ id, label }) => (
                 <div key={id} className="flex flex-col items-center gap-1 w-12">
                   <Label htmlFor={id} className="text-xs">{label}</Label>
