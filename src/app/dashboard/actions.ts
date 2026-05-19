@@ -21,6 +21,10 @@ export async function addCombatant(formData: FormData) {
     0,
     parseInt(formData.get("legendaryResistanceMax") as string, 10) || 0
   )
+  const legendaryActionsMax = Math.max(
+    0,
+    parseInt(formData.get("legendaryActionsMax") as string, 10) || 0
+  )
 
   if (!name?.trim()) return
 
@@ -34,6 +38,7 @@ export async function addCombatant(formData: FormData) {
       hpMax,
       ac,
       legendaryResistanceMax,
+      legendaryActionsMax,
     },
   })
 
@@ -99,6 +104,29 @@ export async function updateConditions(id: string, conditions: string[]) {
   await prisma.combatant.updateMany({
     where: { id, userId: session.user.id },
     data: { conditions: JSON.stringify(conditions) },
+  })
+}
+
+export async function updateLegendaryActionsUsed(id: string, used: number) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { legendaryActionsUsed: used },
+  })
+}
+
+export async function updateLegendaryActionsList(
+  id: string,
+  actions: { name: string; cost: number }[]
+) {
+  const session = await auth()
+  if (!session?.user?.id) return
+
+  await prisma.combatant.updateMany({
+    where: { id, userId: session.user.id },
+    data: { legendaryActions: JSON.stringify(actions) },
   })
 }
 

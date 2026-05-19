@@ -11,6 +11,8 @@ import {
   toggleCombatantAction,
   updateHpCurrent,
   updateLegendaryResistance,
+  updateLegendaryActionsUsed,
+  updateLegendaryActionsList,
   deleteCombatant,
   updateConditions,
   saveToLibrary,
@@ -57,6 +59,13 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
   const [hpDelta, setHpDelta] = useState("")
   const [lrMax, setLrMax] = useState(combatant.legendaryResistanceMax)
   const [lrUsed, setLrUsed] = useState(combatant.legendaryResistanceUsed)
+  const [laMax, setLaMax] = useState(combatant.legendaryActionsMax)
+  const [laUsed, setLaUsed] = useState(combatant.legendaryActionsUsed)
+  const [laList, setLaList] = useState<{ name: string; cost: number }[]>(() => {
+    try { return JSON.parse(combatant.legendaryActions) } catch { return [] }
+  })
+  const [laNewName, setLaNewName] = useState("")
+  const [laNewCost, setLaNewCost] = useState(1)
   const [conditions, setConditions] = useState<string[]>(() =>
     parseConditions(combatant.conditions)
   )
@@ -103,6 +112,43 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
     setLrMax(nextMax)
     setLrUsed(nextUsed)
     void updateLegendaryResistance(combatant.id, nextMax, nextUsed)
+  }
+
+  function handleLaUse(cost: number) {
+    const nextUsed = laUsed + cost
+    if (nextUsed > laMax) return
+    setLaUsed(nextUsed)
+    void updateLegendaryActionsUsed(combatant.id, nextUsed)
+  }
+
+  function handleLaReset() {
+    setLaUsed(0)
+    void updateLegendaryActionsUsed(combatant.id, 0)
+  }
+
+  function handleLaMax(delta: number) {
+    const next = Math.max(0, laMax + delta)
+    setLaMax(next)
+    if (laUsed > next) {
+      setLaUsed(next)
+      void updateLegendaryActionsUsed(combatant.id, next)
+    }
+  }
+
+  function handleLaAdd() {
+    const name = laNewName.trim()
+    if (!name) return
+    const next = [...laList, { name, cost: laNewCost }]
+    setLaList(next)
+    setLaNewName("")
+    setLaNewCost(1)
+    void updateLegendaryActionsList(combatant.id, next)
+  }
+
+  function handleLaRemove(index: number) {
+    const next = laList.filter((_, i) => i !== index)
+    setLaList(next)
+    void updateLegendaryActionsList(combatant.id, next)
   }
 
   function applyConditions(next: string[]) {
@@ -391,6 +437,99 @@ export function CombatantCard({ combatant }: { combatant: Combatant }) {
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* Row 5: Legendary actions — monsters only, when pool > 0 */}
+          {combatant.type === CombatantType.MONSTER && laMax > 0 && (
+            <div className="space-y-1.5 pt-1 border-t border-dashed border-muted-foreground/30">
+              {/* Pool row */}
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-xs text-muted-foreground font-medium mr-0.5">LA</span>
+                {Array.from({ length: laMax }).map((_, i) => {
+                  const spent = i < laUsed
+                  return (
+                    <span
+                      key={i}
+                      className={spent ? "text-muted-foreground" : "text-amber-500"}
+                    >
+                      {spent ? "○" : "●"}
+                    </span>
+                  )
+                })}
+                <button
+                  onClick={() => handleLaMax(-1)}
+                  className="text-xs text-muted-foreground hover:text-foreground w-4 text-center"
+                  title="Decrease pool max"
+                >−</button>
+                <button
+                  onClick={() => handleLaMax(1)}
+                  className="text-xs text-muted-foreground hover:text-foreground w-4 text-center"
+                  title="Increase pool max"
+                >+</button>
+                <button
+                  onClick={handleLaReset}
+                  className="ml-1 text-xs text-muted-foreground hover:text-foreground px-1"
+                  title="Reset legendary action pool"
+                >↺</button>
+              </div>
+
+              {/* Named action buttons */}
+              {laList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {laList.map((action, i) => {
+                    const canUse = laUsed + action.cost <= laMax
+                    return (
+                      <div key={i} className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => handleLaUse(action.cost)}
+                          disabled={!canUse}
+                          className={`px-2 py-0.5 rounded text-xs font-medium border transition-opacity ${
+                            canUse
+                              ? "border-amber-500 text-amber-700 hover:bg-amber-50"
+                              : "opacity-40 border-muted-foreground text-muted-foreground cursor-default"
+                          }`}
+                        >
+                          {action.name} ({action.cost})
+                        </button>
+                        <button
+                          onClick={() => handleLaRemove(i)}
+                          className="text-muted-foreground hover:text-destructive text-xs w-4 text-center"
+                          title={`Remove ${action.name}`}
+                        >×</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Add action form */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={laNewName}
+                  onChange={(e) => setLaNewName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleLaAdd() }}
+                  placeholder="Action name…"
+                  className="h-6 text-xs rounded border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring flex-1 min-w-0"
+                />
+                <input
+                  type="number"
+                  value={laNewCost}
+                  onChange={(e) => setLaNewCost(Math.max(1, parseInt(e.target.value) || 1))}
+                  min={1}
+                  max={laMax || 3}
+                  className="h-6 text-xs rounded border border-input bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring w-10 text-center"
+                  title="Action cost"
+                />
+                <button
+                  onClick={handleLaAdd}
+                  disabled={!laNewName.trim()}
+                  className="h-6 px-2 text-xs rounded border border-input bg-background hover:bg-accent disabled:opacity-40"
+                >
+                  + Add
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <MiniMap

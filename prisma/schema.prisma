@@ -108,6 +108,10 @@ model Combatant {
   legendaryResistanceMax  Int @default(0)
   legendaryResistanceUsed Int @default(0)
 
+  legendaryActionsMax  Int    @default(0)
+  legendaryActionsUsed Int    @default(0)
+  legendaryActions     String @default("[]")
+
   notes String @default("")
 
   mapX Float?

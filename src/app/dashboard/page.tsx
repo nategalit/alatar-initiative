@@ -100,6 +100,18 @@ export default async function DashboardPage() {
               />
             </div>
 
+            <div className="flex flex-col gap-1 w-16">
+              <Label htmlFor="legendaryActionsMax" className="text-xs">LA</Label>
+              <Input
+                id="legendaryActionsMax"
+                name="legendaryActionsMax"
+                type="number"
+                placeholder="0"
+                min="0"
+                className="h-8"
+              />
+            </div>
+
             <Button type="submit" size="sm" className="h-8">
               Add
             </Button>
